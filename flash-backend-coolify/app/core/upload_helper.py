@@ -1,8 +1,7 @@
 """
 File upload helper module.
 
-Provides a unified upload function that uses B2 cloud storage when enabled,
-with automatic fallback to local storage.
+Provides a unified upload function that enforces local storage.
 """
 
 import os
@@ -12,7 +11,6 @@ from pathlib import Path
 from typing import Tuple
 
 from app.core.config import settings
-from app.core.storage import b2_storage
 
 
 async def upload_file_to_storage(
@@ -23,17 +21,17 @@ async def upload_file_to_storage(
     local_subdir: str = "uploads",
 ) -> Tuple[str, str]:
     """
-    Upload a file to storage (B2 or local).
+    Upload a file to local storage.
     
     Args:
         content: File content as bytes
         original_filename: Original filename (for extension)
         content_type: MIME type
-        folder: Folder in B2 bucket
+        folder: Not used (kept for compatibility)
         local_subdir: Subdirectory under UPLOADS_DIR for local storage
     
     Returns:
-        Tuple of (url, storage_type) where storage_type is "b2" or "local"
+        Tuple of (url, storage_type) where storage_type is always "local"
     """
     # Generate unique filename
     ext = os.path.splitext(original_filename)[1] if original_filename else ""
@@ -41,21 +39,7 @@ async def upload_file_to_storage(
     unique_id = str(uuid.uuid4())[:8]
     new_filename = f"{timestamp}_{unique_id}{ext}"
     
-    # Try B2 first
-    if b2_storage.is_enabled():
-        success, url, error = await b2_storage.upload_file(
-            file_content=content,
-            filename=new_filename,
-            content_type=content_type,
-            folder=folder
-        )
-        
-        if success:
-            return url, "b2"
-        else:
-            print(f"[Upload] B2 failed: {error}, falling back to local")
-    
-    # Local storage fallback
+    # Local storage
     local_dir = Path(settings.UPLOADS_DIR) / local_subdir
     local_dir.mkdir(parents=True, exist_ok=True)
     
@@ -76,14 +60,14 @@ async def upload_file_with_prefix(
     local_subdir: str = "uploads",
 ) -> Tuple[str, str, str]:
     """
-    Upload a file with a custom prefix in the filename.
+    Upload a file with a custom prefix to local storage.
     
     Args:
         content: File content as bytes
         original_filename: Original filename (for extension)
         prefix: Prefix for the filename (e.g., "emp123_avatar")
         content_type: MIME type
-        folder: Folder in B2 bucket
+        folder: Not used (kept for compatibility)
         local_subdir: Subdirectory under UPLOADS_DIR for local storage
     
     Returns:
@@ -95,21 +79,7 @@ async def upload_file_with_prefix(
     unique_id = str(uuid.uuid4())[:8]
     new_filename = f"{prefix}_{timestamp}_{unique_id}{ext}"
     
-    # Try B2 first
-    if b2_storage.is_enabled():
-        success, url, error = await b2_storage.upload_file(
-            file_content=content,
-            filename=new_filename,
-            content_type=content_type,
-            folder=folder
-        )
-        
-        if success:
-            return url, new_filename, "b2"
-        else:
-            print(f"[Upload] B2 failed: {error}, falling back to local")
-    
-    # Local storage fallback
+    # Local storage
     local_dir = Path(settings.UPLOADS_DIR) / local_subdir
     local_dir.mkdir(parents=True, exist_ok=True)
     

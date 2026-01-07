@@ -3,22 +3,34 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Query
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.storage import b2_storage
+from app.core.database import get_db
+from app.models.core.file import File as FileModel
+from app.schemas.core.file import FileResponse
+from app.api.dependencies import get_current_user
+from app.models.core.user import User
 
 router = APIRouter()
 
-# Define upload directory for local storage fallback
-UPLOAD_DIR = Path(settings.UPLOADS_DIR) / "expenses"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+# Default upload directory for status check
+UPLOAD_DIR = Path(settings.UPLOADS_DIR) / "uploads"
 
 
-@router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    """Upload a file and return its URL. Uses B2 cloud storage if enabled, otherwise local storage."""
+@router.post("/upload", response_model=FileResponse)
+async def upload_file(
+    file: UploadFile = File(...),
+    folder: str = Query("uploads", description="Folder to upload to"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Upload a file and return its URL.
+    Stores file locally and saves metadata to the database.
+    """
     try:
         # Validate file
         if not file.filename:
@@ -27,55 +39,44 @@ async def upload_file(file: UploadFile = File(...)):
         # Read file content
         content = await file.read()
         
-        # Try B2 cloud storage first
-        if b2_storage.is_enabled():
-            success, url, error = await b2_storage.upload_file(
-                file_content=content,
-                filename=file.filename,
-                content_type=file.content_type or "application/octet-stream",
-                folder="expenses"
-            )
-            
-            if success:
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        "success": True,
-                        "url": url,
-                        "path": url,
-                        "filename": os.path.basename(url),
-                        "original_filename": file.filename,
-                        "storage": "b2"
-                    }
-                )
-            else:
-                # Log error but fall through to local storage
-                print(f"[Upload] B2 upload failed: {error}, falling back to local storage")
+        # Determine MIME type if missing
+        mime_type = file.content_type or "application/octet-stream"
         
-        # Fallback to local storage
-        file_ext = os.path.splitext(file.filename)[1]
+        original_filename = file.filename
+        
+        # Local storage logic
+        file_ext = os.path.splitext(original_filename)[1]
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
         new_filename = f"{timestamp}_{unique_id}{file_ext}"
+
+        local_upload_dir = Path(settings.UPLOADS_DIR) / folder
+        local_upload_dir.mkdir(parents=True, exist_ok=True)
         
-        file_path = UPLOAD_DIR / new_filename
+        file_path = local_upload_dir / new_filename
         
         with open(file_path, "wb") as buffer:
             buffer.write(content)
         
-        file_url = f"/uploads/expenses/{new_filename}"
+        unique_filename_db = new_filename
+        public_path = f"/uploads/{folder}/{new_filename}" 
+        storage_type = "local"
         
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "url": file_url,
-                "path": file_url,
-                "filename": new_filename,
-                "original_filename": file.filename,
-                "storage": "local"
-            }
+        # Save to database
+        db_file = FileModel(
+            filename=original_filename,
+            unique_filename=unique_filename_db,
+            path=public_path,
+            storage_type=storage_type,
+            mime_type=mime_type,
+            size=len(content),
+            user_id=current_user.id
         )
+        db.add(db_file)
+        db.commit()
+        db.refresh(db_file)
+
+        return db_file
     
     except HTTPException:
         raise
@@ -85,64 +86,9 @@ async def upload_file(file: UploadFile = File(...)):
 
 @router.get("/storage/status")
 async def storage_status():
-    """Check the status of cloud storage configuration."""
-    # Debug: Show raw settings values
-    debug_info = {
-        "B2_ENABLED_raw": settings.B2_ENABLED,
-        "B2_KEY_ID_set": bool(settings.B2_KEY_ID),
-        "B2_APPLICATION_KEY_set": bool(settings.B2_APPLICATION_KEY),
-        "B2_BUCKET_NAME": settings.B2_BUCKET_NAME or "(not set)",
-        "B2_ENDPOINT_URL": settings.B2_ENDPOINT_URL or "(not set)",
-        "B2_REGION": settings.B2_REGION or "(not set)",
+    """Check the status of storage configuration."""
+    return {
+        "storage_type": "local",
+        "local_path": str(UPLOAD_DIR),
+        "message": "Using local storage.",
     }
-    
-    if b2_storage.is_enabled():
-        success, message = b2_storage.test_connection()
-        return {
-            "b2_enabled": True,
-            "b2_connected": success,
-            "message": message,
-            "bucket": settings.B2_BUCKET_NAME,
-            "endpoint": settings.B2_ENDPOINT_URL,
-            "debug": debug_info,
-        }
-    else:
-        return {
-            "b2_enabled": False,
-            "b2_connected": False,
-            "message": "B2 storage is not enabled. Using local storage.",
-            "local_path": str(UPLOAD_DIR),
-            "debug": debug_info,
-        }
-
-
-@router.post("/storage/test")
-async def test_storage_upload():
-    """Test upload functionality by uploading a small test file."""
-    if not b2_storage.is_enabled():
-        return {
-            "success": False,
-            "error": "B2 storage is not enabled. Set B2_ENABLED=true in environment variables.",
-        }
-    
-    # Create a small test file
-    test_content = b"This is a test file for B2 storage verification."
-    
-    success, url, error = await b2_storage.upload_file(
-        file_content=test_content,
-        filename="test.txt",
-        content_type="text/plain",
-        folder="test"
-    )
-    
-    if success:
-        return {
-            "success": True,
-            "message": "Test file uploaded successfully!",
-            "url": url,
-        }
-    else:
-        return {
-            "success": False,
-            "error": error,
-        }

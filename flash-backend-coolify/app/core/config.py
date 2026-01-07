@@ -40,26 +40,10 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:8000,http://127.0.0.1:8000"
     
-    # Backblaze B2 Cloud Storage (S3-compatible)
-    B2_ENABLED: bool = False  # Set to True to use B2 instead of local storage
-    B2_KEY_ID: str = ""
-    B2_APPLICATION_KEY: str = ""
-    B2_BUCKET_NAME: str = ""
-    B2_ENDPOINT_URL: str = ""  # e.g., https://s3.us-east-005.backblazeb2.com
-    B2_REGION: str = "us-east-005"
-    
     @property
     def allowed_origins_list(self) -> List[str]:
         """Convert comma-separated string to list."""
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
-    
-    @property
-    def b2_public_url(self) -> str:
-        """Get the public URL base for B2 files."""
-        if self.B2_BUCKET_NAME and self.B2_ENDPOINT_URL:
-            # Backblaze B2 public URL format
-            return f"https://{self.B2_BUCKET_NAME}.{self.B2_ENDPOINT_URL.replace('https://', '').replace('http://', '')}"
-        return ""
     
 settings = Settings()
 

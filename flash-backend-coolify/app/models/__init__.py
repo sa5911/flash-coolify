@@ -1,6 +1,7 @@
 """Models package initialization."""
 
 from app.models.core.user import User
+from app.models.core.file import File
 from app.models.fleet.vehicle import Vehicle
 from app.models.fleet.vehicle_document import VehicleDocument
 from app.models.fleet.vehicle_assignment import VehicleAssignment
@@ -46,6 +47,7 @@ from app.models.inventory.restricted_item_transaction import RestrictedItemTrans
 
 __all__ = [
     "User",
+    "File",
     "Vehicle",
     "VehicleDocument",
     "EmployeeDocument",
