@@ -1,0 +1,86 @@
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+flash_erp.db
+*.backup
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# Uploads
+uploads/
+
+# Logs
+*.log
+server_log*.txt
+
+# Keep important txt files
+!requirements.txt
+!runtime.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic
+alembic/versions/*.pyc
+
+# Test files (optional - keep if you want to track them)
+# Only in root directory, not in app/
+/test_*.py
+/check_*.py
+/debug_*.py
+/fix_*.py
+/import_*.py
+/verify_*.py
+/inspect_*.py
+/migrate_*.py
+/reset_*.py
+/setup_*.py
+/export_*.py
+/add_*.py
+/remove_*.py
+/create_*.py
+/copy_*.py
+/permanent_*.py
+/comprehensive_*.py
+/emergency_*.py
+/simple_*.py
+/smart_*.py
+/final_*.py
+/fixed_*.py
+/direct_*.py
+/bulk_*.py
+/clear_*.py
+/trigger_*.py
+/data_import_tool.py
